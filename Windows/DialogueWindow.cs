@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Utility;
@@ -13,11 +14,16 @@ namespace Adalomoon.Windows;
 internal sealed class DialogueWindow : Window
 {
     private string addonName = string.Empty;
-    private List<string> lines = [];
+    private string speaker = string.Empty;
+    private string body = string.Empty;
     private string fingerprint = string.Empty;
+    private readonly IFontHandle font;
 
-    public DialogueWindow() : base("##AdalomoonDialogue")
+    public Action? CloseRequested { get; set; }
+
+    public DialogueWindow(IFontHandle font) : base("##AdalomoonDialogue")
     {
+        this.font = font;
         IsOpen = false;
         Flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize |
                 ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse |
@@ -39,13 +45,8 @@ internal sealed class DialogueWindow : Window
             if (node is null || node->Type != NodeType.Text || node->IsDrawDisabled)
                 continue;
 
-            var textNode = (AtkTextNode*)node;
-            var text = textNode->NodeText.ExtractText();
-            if (string.IsNullOrWhiteSpace(text))
-                continue;
-
-            text = Clean(text);
-            if (text.Length > 0)
+            var text = Clean(((AtkTextNode*)node)->NodeText.ExtractText());
+            if (!string.IsNullOrWhiteSpace(text))
                 found.Add((node->ScreenY, text));
         }
 
@@ -58,7 +59,8 @@ internal sealed class DialogueWindow : Window
             return;
 
         addonName = args.AddonName;
-        lines = next;
+        speaker = next[0];
+        body = string.Join("\n\n", next.Skip(1));
         fingerprint = nextFingerprint;
         IsOpen = true;
     }
@@ -66,9 +68,10 @@ internal sealed class DialogueWindow : Window
     public void Clear()
     {
         IsOpen = false;
-        lines.Clear();
-        fingerprint = string.Empty;
         addonName = string.Empty;
+        speaker = string.Empty;
+        body = string.Empty;
+        fingerprint = string.Empty;
     }
 
     public bool IsShowingAddon(string name) => addonName == name;
@@ -76,45 +79,78 @@ internal sealed class DialogueWindow : Window
     public override void PreDraw()
     {
         var display = ImGui.GetIO().DisplaySize;
-        var width = Math.Clamp(display.X * 0.29f, 380f, 520f);
-        var height = Math.Clamp(display.Y * 0.68f, 420f, 760f);
-        ImGui.SetNextWindowPos(new System.Numerics.Vector2(display.X - width - 28f, (display.Y - height) * 0.5f), ImGuiCond.Always);
+        var width = Math.Clamp(display.X * 0.31f, 360f, 470f);
+        var approximateLines = Math.Max(2, (body.Length / Math.Max(28, (int)(width / 9f))) + 1);
+        var height = Math.Clamp(206f + approximateLines * 23f, 300f, Math.Min(490f, display.Y - 48f));
+        var pos = new System.Numerics.Vector2(display.X - width - 28f, Math.Clamp(display.Y * 0.43f, 28f, display.Y - height - 24f));
+        ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(width, height), ImGuiCond.Always);
         ImGui.SetNextWindowBgAlpha(0f);
     }
 
     public override void Draw()
     {
+        using var fontScope = font.Push();
         var draw = ImGui.GetWindowDrawList();
         var pos = ImGui.GetWindowPos();
         var size = ImGui.GetWindowSize();
-        draw.AddRectFilled(pos, pos + size, ImGui.GetColorU32(new System.Numerics.Vector4(0.035f, 0.055f, 0.11f, 0.97f)), 12f);
-        draw.AddRect(pos, pos + size, ImGui.GetColorU32(new System.Numerics.Vector4(0.78f, 0.61f, 0.29f, 0.98f)), 12f, ImDrawFlags.None, 2f);
-        var paperMin = pos + new System.Numerics.Vector2(16f, 54f);
-        var paperMax = pos + size - new System.Numerics.Vector2(16f, 18f);
-        draw.AddRectFilled(paperMin, paperMax, ImGui.GetColorU32(new System.Numerics.Vector4(0.82f, 0.75f, 0.59f, 0.98f)), 7f);
-        draw.AddRect(paperMin, paperMax, ImGui.GetColorU32(new System.Numerics.Vector4(0.93f, 0.82f, 0.57f, 1f)), 7f, ImDrawFlags.None, 1.5f);
 
-        ImGui.SetCursorPos(new System.Numerics.Vector2(26, 18));
-        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.92f, 0.76f, 0.43f, 1));
-        ImGui.TextUnformatted("ДИАЛОГ  ·  " + addonName);
+        var navy = new System.Numerics.Vector4(0.025f, 0.045f, 0.09f, 0.97f);
+        var gold = new System.Numerics.Vector4(0.78f, 0.59f, 0.29f, 1f);
+        var paper = new System.Numerics.Vector4(0.89f, 0.82f, 0.67f, 1f);
+        draw.AddRectFilled(pos, pos + size, ImGui.GetColorU32(navy), 14f);
+        draw.AddRect(pos, pos + size, ImGui.GetColorU32(gold), 14f, ImDrawFlags.None, 2f);
+        draw.AddRectFilled(pos + new System.Numerics.Vector2(2f, 2f), pos + new System.Numerics.Vector2(size.X - 2f, 5f), ImGui.GetColorU32(gold), 2f);
+
+        var paperMin = pos + new System.Numerics.Vector2(15f, 74f);
+        var paperMax = pos + size - new System.Numerics.Vector2(15f, 53f);
+        draw.AddRectFilled(paperMin + new System.Numerics.Vector2(0f, 3f), paperMax + new System.Numerics.Vector2(0f, 3f), ImGui.GetColorU32(new System.Numerics.Vector4(0f, 0f, 0f, 0.24f)), 8f);
+        draw.AddRectFilled(paperMin, paperMax, ImGui.GetColorU32(paper), 8f);
+        draw.AddRect(paperMin, paperMax, ImGui.GetColorU32(new System.Numerics.Vector4(0.69f, 0.53f, 0.3f, 1f)), 8f, ImDrawFlags.None, 1f);
+        draw.AddCircleFilled(pos + new System.Numerics.Vector2(39f, 37f), 17f, ImGui.GetColorU32(new System.Numerics.Vector4(0.3f, 0.24f, 0.16f, 1f)));
+        draw.AddCircle(pos + new System.Numerics.Vector2(39f, 37f), 17f, ImGui.GetColorU32(gold), 0, 1.5f);
+
+        ImGui.SetCursorPos(new System.Numerics.Vector2(32f, 25f));
+        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.92f, 0.79f, 0.52f, 1f));
+        ImGui.SetWindowFontScale(1.08f);
+        ImGui.TextUnformatted(string.IsNullOrWhiteSpace(speaker) ? "✦" : speaker[..1].ToUpperInvariant());
+        ImGui.SetWindowFontScale(1f);
         ImGui.PopStyleColor();
-        ImGui.Separator();
-        ImGui.SetCursorPos(new System.Numerics.Vector2(34, 72));
 
-        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.17f, 0.14f, 0.11f, 1f));
-        foreach (var line in lines)
+        ImGui.SetCursorPos(new System.Numerics.Vector2(65f, 23f));
+        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.92f, 0.79f, 0.52f, 1f));
+        ImGui.SetWindowFontScale(1.12f);
+        ImGui.TextUnformatted(string.IsNullOrWhiteSpace(speaker) ? "РАЗГОВОР" : speaker);
+        ImGui.SetWindowFontScale(1f);
+        ImGui.PopStyleColor();
+
+        ImGui.SetCursorPos(new System.Numerics.Vector2(size.X - 49f, 13f));
+        ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.12f, 0.14f, 0.2f, 0.95f));
+        ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new System.Numerics.Vector4(0.35f, 0.18f, 0.16f, 1f));
+        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.96f, 0.87f, 0.68f, 1f));
+        if (ImGui.Button("×##close-dialogue", new System.Numerics.Vector2(34f, 30f)))
+            CloseRequested?.Invoke();
+        ImGui.PopStyleColor(3);
+
+        var textWidth = size.X - 62f;
+        ImGui.SetCursorPos(new System.Numerics.Vector2(31f, 86f));
+        if (ImGui.BeginChild("##dialogue-text", new System.Numerics.Vector2(textWidth, Math.Max(80f, size.Y - 145f)), false, ImGuiWindowFlags.NoBackground))
         {
-            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + ImGui.GetContentRegionAvail().X - 42);
-            ImGui.TextUnformatted(line);
+            ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.16f, 0.13f, 0.1f, 1f));
+            ImGui.SetWindowFontScale(1.28f);
+            ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + textWidth - 8f);
+            ImGui.TextUnformatted(string.IsNullOrWhiteSpace(body) ? "…" : body);
             ImGui.PopTextWrapPos();
-            ImGui.Spacing();
+            ImGui.SetWindowFontScale(1f);
+            ImGui.PopStyleColor();
         }
-        ImGui.PopStyleColor();
+        ImGui.EndChild();
 
-        ImGui.SetCursorPos(new System.Numerics.Vector2(size.X - 168, size.Y - 28));
-        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.72f, 0.7f, 0.66f, 0.8f));
-        ImGui.TextUnformatted("ВЫБОР — В ИГРЕ");
+        var dividerY = size.Y - 44f;
+        draw.AddLine(pos + new System.Numerics.Vector2(22f, dividerY), pos + new System.Numerics.Vector2(size.X - 22f, dividerY), ImGui.GetColorU32(new System.Numerics.Vector4(0.65f, 0.5f, 0.29f, 0.48f)), 1f);
+        ImGui.SetCursorPos(new System.Numerics.Vector2(25f, size.Y - 35f));
+        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.83f, 0.75f, 0.61f, 0.9f));
+        ImGui.TextUnformatted("Подтвердить — дальше     ·     Esc — закрыть");
         ImGui.PopStyleColor();
     }
 

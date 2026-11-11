@@ -14,8 +14,10 @@ internal sealed unsafe class CameraFramer
     private const float TurnRightRadians = 0.48f;
     private const float TransitionSeconds = 0.85f;
     private bool active;
+    private bool framed;
     private DateTime startedAt;
     private Camera* camera;
+    private Camera* framedCamera;
     private float originalDistance;
     private float originalYaw;
     private float targetDistance;
@@ -23,7 +25,7 @@ internal sealed unsafe class CameraFramer
 
     public void Begin()
     {
-        if (active)
+        if (active || framed)
             return;
 
         var manager = CameraManager.Instance();
@@ -31,6 +33,7 @@ internal sealed unsafe class CameraFramer
             return;
 
         camera = manager->Camera;
+        framedCamera = camera;
         if (camera->ControlMode == CameraControlMode.FirstPerson)
             return;
 
@@ -46,6 +49,7 @@ internal sealed unsafe class CameraFramer
         targetYaw = WrapAngle(originalYaw + TurnRightRadians);
         startedAt = DateTime.UtcNow;
         active = true;
+        framed = true;
     }
 
     public void Update(IFramework framework)
@@ -67,6 +71,14 @@ internal sealed unsafe class CameraFramer
         t = t * t * (3f - 2f * t);
         camera->Distance = Math.Clamp(Lerp(originalDistance, targetDistance, t), camera->MinDistance, camera->MaxDistance);
         camera->DirH = LerpAngle(originalYaw, targetYaw, t);
+
+        // Once the opening composition is reached, stop writing camera values.
+        // The player can immediately pan and zoom freely while the dialogue remains open.
+        if (t >= 1f)
+        {
+            active = false;
+            camera = null;
+        }
     }
 
     public void Restore()
@@ -77,9 +89,23 @@ internal sealed unsafe class CameraFramer
             camera->Distance = Math.Clamp(originalDistance, camera->MinDistance, camera->MaxDistance);
             camera->DirH = originalYaw;
         }
+        else if (framed && framedCamera is not null && manager is not null && manager->Camera == framedCamera)
+        {
+            // Return to the pre-dialogue view only if the player left the framing untouched.
+            // If they moved the camera, preserve their chosen view.
+            var untouched = Math.Abs(framedCamera->Distance - targetDistance) < 0.1f &&
+                            Math.Abs(WrapAngle(framedCamera->DirH - targetYaw)) < 0.02f;
+            if (untouched)
+            {
+                framedCamera->Distance = Math.Clamp(originalDistance, framedCamera->MinDistance, framedCamera->MaxDistance);
+                framedCamera->DirH = originalYaw;
+            }
+        }
 
         active = false;
+        framed = false;
         camera = null;
+        framedCamera = null;
     }
 
     private static float Lerp(float from, float to, float t) => from + ((to - from) * t);
