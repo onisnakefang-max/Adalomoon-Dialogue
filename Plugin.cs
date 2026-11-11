@@ -1,7 +1,9 @@
 using System;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.IoC;
+using Dalamud.Interface.ManagedFontAtlas;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -16,21 +18,26 @@ public sealed class Plugin : IDalamudPlugin
     [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
     [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
+    [PluginService] internal static IKeyState KeyState { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
 
     private static readonly string[] DialogueAddons = ["Talk", "BattleTalk", "TalkSubtitle", "MiniTalk"];
     private readonly WindowSystem windowSystem = new("Adalomoon Dialogue");
     private readonly DialogueWindow dialogueWindow;
     private readonly CameraFramer cameraFramer = new();
+    private readonly IFontHandle dialogueFont;
     private nint hiddenTalkRoot;
-    private bool talkRootWasDrawDisabled;
+    private bool talkRootWasVisible;
+    private bool escapeWasDown;
 
     public Plugin()
     {
-        dialogueWindow = new DialogueWindow(PluginInterface.UiBuilder.DefaultFontHandle);
+        dialogueFont = PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
+            e.OnPreBuild(tk => tk.AddDalamudDefaultFont(22f)));
+        dialogueWindow = new DialogueWindow(dialogueFont);
         dialogueWindow.CloseRequested = CloseCurrentDialogue;
         windowSystem.AddWindow(dialogueWindow);
-        Framework.Update += cameraFramer.Update;
+        Framework.Update += OnFrameworkUpdate;
 
         foreach (var addon in DialogueAddons)
         {
@@ -48,7 +55,7 @@ public sealed class Plugin : IDalamudPlugin
     {
         PluginInterface.UiBuilder.Draw -= windowSystem.Draw;
         PluginInterface.UiBuilder.OpenMainUi -= Toggle;
-        Framework.Update -= cameraFramer.Update;
+        Framework.Update -= OnFrameworkUpdate;
         RestoreNativeTalk();
         cameraFramer.Restore();
         foreach (var addon in DialogueAddons)
@@ -59,6 +66,7 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         windowSystem.RemoveAllWindows();
+        dialogueFont.Dispose();
     }
 
     private void Toggle() => dialogueWindow.IsOpen = !dialogueWindow.IsOpen;
@@ -104,12 +112,11 @@ public sealed class Plugin : IDalamudPlugin
         if (hiddenTalkRoot == 0)
         {
             hiddenTalkRoot = rootAddress;
-            talkRootWasDrawDisabled = addon->RootNode->IsDrawDisabled;
+            talkRootWasVisible = addon->RootNode->IsVisible();
         }
 
-        // Suppress only the native Talk visuals; the game addon remains alive so
-        // normal confirmation and Escape handling stay with FFXIV.
-        addon->RootNode->IsDrawDisabled = true;
+        // Suppress only the native Talk visuals; the game addon remains alive.
+        addon->RootNode->ToggleVisibility(false);
     }
 
     private unsafe void RestoreNativeTalk(AddonArgs? args = null)
@@ -121,17 +128,46 @@ public sealed class Plugin : IDalamudPlugin
             ? GameGui.GetAddonByName<AtkUnitBase>("Talk")
             : (AtkUnitBase*)args.Addon.Address;
         if (addon is not null && addon->RootNode is not null && (nint)addon->RootNode == hiddenTalkRoot)
-            addon->RootNode->IsDrawDisabled = talkRootWasDrawDisabled;
+            addon->RootNode->ToggleVisibility(talkRootWasVisible);
 
         hiddenTalkRoot = 0;
-        talkRootWasDrawDisabled = false;
+        talkRootWasVisible = false;
     }
 
     private unsafe void CloseCurrentDialogue()
     {
         var addon = GameGui.GetAddonByName<AtkUnitBase>("Talk");
-        if (addon is not null && addon->IsVisible)
-            addon->Close(true);
+        if (addon is not null && addon->IsVisible && !addon->Close(true))
+            addon->Hide(true, true, 0);
+
+        RestoreNativeTalk();
+        dialogueWindow.Clear();
+        cameraFramer.Restore();
+    }
+
+    private unsafe void OnFrameworkUpdate(IFramework framework)
+    {
+        cameraFramer.Update(framework);
+
+        var escapeDown = KeyState[VirtualKey.ESCAPE];
+        if (dialogueWindow.IsOpen && escapeDown && !escapeWasDown)
+            CloseCurrentDialogue();
+        escapeWasDown = escapeDown;
+
+        if (hiddenTalkRoot == 0)
+            return;
+
+        var addon = GameGui.GetAddonByName<AtkUnitBase>("Talk");
+        if (addon is null || !addon->IsVisible)
+        {
+            RestoreNativeTalk();
+            dialogueWindow.Clear();
+            cameraFramer.Restore();
+            return;
+        }
+
+        if (addon->RootNode is not null && (nint)addon->RootNode == hiddenTalkRoot)
+            addon->RootNode->ToggleVisibility(false);
     }
 }
 

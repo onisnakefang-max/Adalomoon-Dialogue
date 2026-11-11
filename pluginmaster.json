@@ -3,8 +3,8 @@
     "Author": "Adalomoon",
     "Name": "Adalomoon Dialogue",
     "InternalName": "Adalomoon",
-    "AssemblyVersion": "0.2.0.0",
-    "Description": "Компактный диалоговый интерфейс FFXIV с пергаментной панелью, кадрированием камеры и свободным управлением.",
+    "AssemblyVersion": "0.3.0.0",
+    "Description": "Русская панель диалогов FFXIV с чётким крупным шрифтом, скрытием штатного облачка и надёжным закрытием.",
     "ApplicableVersion": "any",
     "RepoUrl": "https://github.com/onisnakefang-max/Adalomoon-Dialogue",
     "Tags": [
@@ -18,10 +18,10 @@
     "LoadSync": false,
     "CanUnloadAsync": false,
     "LoadPriority": 0,
-    "Punchline": "Атмосферная панель диалогов FFXIV.",
+    "Punchline": "Крупный читаемый диалоговый интерфейс с пергаментной панелью.",
     "AcceptsFeedback": true,
-    "DownloadLinkInstall": "https://github.com/onisnakefang-max/Adalomoon-Dialogue/releases/download/v0.2.0.0/latest.zip",
-    "DownloadLinkUpdate": "https://github.com/onisnakefang-max/Adalomoon-Dialogue/releases/download/v0.2.0.0/latest.zip",
-    "LastUpdate": "1794410948"
+    "DownloadLinkInstall": "https://github.com/onisnakefang-max/Adalomoon-Dialogue/releases/download/v0.3.0.0/latest.zip",
+    "DownloadLinkUpdate": "https://github.com/onisnakefang-max/Adalomoon-Dialogue/releases/download/v0.3.0.0/latest.zip",
+    "LastUpdate": "1794411754"
   }
 ]

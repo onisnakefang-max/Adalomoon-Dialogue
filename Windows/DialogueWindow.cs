@@ -79,10 +79,13 @@ internal sealed class DialogueWindow : Window
     public override void PreDraw()
     {
         var display = ImGui.GetIO().DisplaySize;
-        var width = Math.Clamp(display.X * 0.31f, 360f, 470f);
+        var maxWidth = Math.Max(320f, Math.Min(470f, display.X - 32f));
+        var width = Math.Clamp(display.X * 0.31f, Math.Min(360f, maxWidth), maxWidth);
         var approximateLines = Math.Max(2, (body.Length / Math.Max(28, (int)(width / 9f))) + 1);
-        var height = Math.Clamp(206f + approximateLines * 23f, 300f, Math.Min(490f, display.Y - 48f));
-        var pos = new System.Numerics.Vector2(display.X - width - 28f, Math.Clamp(display.Y * 0.43f, 28f, display.Y - height - 24f));
+        var maxHeight = Math.Max(280f, Math.Min(490f, display.Y - 48f));
+        var height = Math.Clamp(206f + approximateLines * 23f, Math.Min(300f, maxHeight), maxHeight);
+        var maxY = Math.Max(24f, display.Y - height - 24f);
+        var pos = new System.Numerics.Vector2(Math.Max(16f, display.X - width - 28f), Math.Clamp(display.Y * 0.43f, 24f, maxY));
         ImGui.SetNextWindowPos(pos, ImGuiCond.Always);
         ImGui.SetNextWindowSize(new System.Numerics.Vector2(width, height), ImGuiCond.Always);
         ImGui.SetNextWindowBgAlpha(0f);
@@ -107,29 +110,25 @@ internal sealed class DialogueWindow : Window
         draw.AddRectFilled(paperMin + new System.Numerics.Vector2(0f, 3f), paperMax + new System.Numerics.Vector2(0f, 3f), ImGui.GetColorU32(new System.Numerics.Vector4(0f, 0f, 0f, 0.24f)), 8f);
         draw.AddRectFilled(paperMin, paperMax, ImGui.GetColorU32(paper), 8f);
         draw.AddRect(paperMin, paperMax, ImGui.GetColorU32(new System.Numerics.Vector4(0.69f, 0.53f, 0.3f, 1f)), 8f, ImDrawFlags.None, 1f);
-        draw.AddCircleFilled(pos + new System.Numerics.Vector2(39f, 37f), 17f, ImGui.GetColorU32(new System.Numerics.Vector4(0.3f, 0.24f, 0.16f, 1f)));
-        draw.AddCircle(pos + new System.Numerics.Vector2(39f, 37f), 17f, ImGui.GetColorU32(gold), 0, 1.5f);
+        var headerSpeaker = string.IsNullOrWhiteSpace(speaker) ? "Разговор" : speaker;
+        var maxSpeakerWidth = size.X - 105f;
+        while (headerSpeaker.Length > 1 && ImGui.CalcTextSize(headerSpeaker).X > maxSpeakerWidth)
+            headerSpeaker = headerSpeaker[..^2] + "…";
 
-        ImGui.SetCursorPos(new System.Numerics.Vector2(32f, 25f));
+        ImGui.SetCursorPos(new System.Numerics.Vector2(25f, 21f));
         ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.92f, 0.79f, 0.52f, 1f));
-        ImGui.SetWindowFontScale(1.08f);
-        ImGui.TextUnformatted(string.IsNullOrWhiteSpace(speaker) ? "✦" : speaker[..1].ToUpperInvariant());
-        ImGui.SetWindowFontScale(1f);
+        ImGui.TextUnformatted(headerSpeaker);
         ImGui.PopStyleColor();
 
-        ImGui.SetCursorPos(new System.Numerics.Vector2(65f, 23f));
-        ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.92f, 0.79f, 0.52f, 1f));
-        ImGui.SetWindowFontScale(1.12f);
-        ImGui.TextUnformatted(string.IsNullOrWhiteSpace(speaker) ? "РАЗГОВОР" : speaker);
-        ImGui.SetWindowFontScale(1f);
-        ImGui.PopStyleColor();
-
-        ImGui.SetCursorPos(new System.Numerics.Vector2(size.X - 49f, 13f));
+        ImGui.SetCursorPos(new System.Numerics.Vector2(size.X - 45f, 13f));
         ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.12f, 0.14f, 0.2f, 0.95f));
         ImGui.PushStyleColor(ImGuiCol.ButtonHovered, new System.Numerics.Vector4(0.35f, 0.18f, 0.16f, 1f));
         ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.96f, 0.87f, 0.68f, 1f));
-        if (ImGui.Button("×##close-dialogue", new System.Numerics.Vector2(34f, 30f)))
+        if (ImGui.Button("×##close-dialogue", new System.Numerics.Vector2(30f, 30f)))
+        {
+            IsOpen = false;
             CloseRequested?.Invoke();
+        }
         ImGui.PopStyleColor(3);
 
         var textWidth = size.X - 62f;
@@ -137,11 +136,9 @@ internal sealed class DialogueWindow : Window
         if (ImGui.BeginChild("##dialogue-text", new System.Numerics.Vector2(textWidth, Math.Max(80f, size.Y - 145f)), false, ImGuiWindowFlags.NoBackground))
         {
             ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.16f, 0.13f, 0.1f, 1f));
-            ImGui.SetWindowFontScale(1.28f);
             ImGui.PushTextWrapPos(ImGui.GetCursorPosX() + textWidth - 8f);
             ImGui.TextUnformatted(string.IsNullOrWhiteSpace(body) ? "…" : body);
             ImGui.PopTextWrapPos();
-            ImGui.SetWindowFontScale(1f);
             ImGui.PopStyleColor();
         }
         ImGui.EndChild();
@@ -150,7 +147,7 @@ internal sealed class DialogueWindow : Window
         draw.AddLine(pos + new System.Numerics.Vector2(22f, dividerY), pos + new System.Numerics.Vector2(size.X - 22f, dividerY), ImGui.GetColorU32(new System.Numerics.Vector4(0.65f, 0.5f, 0.29f, 0.48f)), 1f);
         ImGui.SetCursorPos(new System.Numerics.Vector2(25f, size.Y - 35f));
         ImGui.PushStyleColor(ImGuiCol.Text, new System.Numerics.Vector4(0.83f, 0.75f, 0.61f, 0.9f));
-        ImGui.TextUnformatted("Подтвердить — дальше     ·     Esc — закрыть");
+        ImGui.TextUnformatted("Enter / A — продолжить    ·    Esc / × — закрыть");
         ImGui.PopStyleColor();
     }
 
