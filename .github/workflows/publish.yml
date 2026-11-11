@@ -34,7 +34,7 @@ jobs:
       - name: Stage plugin package
         shell: pwsh
         run: |
-          $package = 'bin/Release/latest.zip'
+          $package = 'bin/Release/Adalomoon/latest.zip'
           if (-not (Test-Path $package)) { throw "Dalamud package was not produced: $package" }
           New-Item -ItemType Directory -Force -Path release | Out-Null
           Copy-Item $package 'release/latest.zip' -Force
