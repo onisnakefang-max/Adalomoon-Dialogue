@@ -1,0 +1,22 @@
+[
+  {
+    "Author": "Adalomoon",
+    "Name": "Adalomoon Dialogue",
+    "InternalName": "Adalomoon",
+    "AssemblyVersion": "0.1.0.0",
+    "Description": "Атмосферная панель диалогов FFXIV: пергамент справа и ограниченное кадрирование камеры.",
+    "ApplicableVersion": "any",
+    "RepoUrl": "https://github.com/onisnakefang-max/Adalomoon-Dialogue",
+    "Tags": ["dialogue", "roleplay", "overlay", "ui"],
+    "DalamudApiLevel": 15,
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": false,
+    "LoadPriority": 0,
+    "Punchline": "Атмосферная панель диалогов FFXIV.",
+    "AcceptsFeedback": true,
+    "DownloadLink": "https://github.com/onisnakefang-max/Adalomoon-Dialogue/releases/download/v0.1.0.0/latest.zip",
+    "LastUpdate": "2026-11-11T00:00:00Z"
+  }
+]
+

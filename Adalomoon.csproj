@@ -1,0 +1,13 @@
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+  <PropertyGroup>
+    <Version>0.1.0.0</Version>
+    <Author>Adalomoon</Author>
+    <Name>Adalomoon Dialogue</Name>
+    <Punchline>Атмосферная панель диалогов FFXIV.</Punchline>
+    <Description>Показывает текст открытых диалоговых окон поверх игры в синей и золотой стилистике.</Description>
+    <RepoUrl>https://github.com/onisnakefang-max/Adalomoon-Dialogue</RepoUrl>
+    <Tags>dialogue;roleplay;overlay;ui</Tags>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+</Project>
+

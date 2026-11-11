@@ -1,0 +1,59 @@
+name: Build and publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download official Dalamud development references
+        shell: pwsh
+        run: |
+          $destination = Join-Path $env:APPDATA 'XIVLauncher\addon\Hooks\dev'
+          New-Item -ItemType Directory -Force -Path $destination | Out-Null
+          Invoke-WebRequest -Uri 'https://goatcorp.github.io/dalamud-distrib/latest.zip' -OutFile 'dalamud.zip'
+          Expand-Archive -Path 'dalamud.zip' -DestinationPath $destination -Force
+
+      - name: Build plugin
+        run: dotnet build .\Adalomoon.csproj --configuration Release
+
+      - name: Stage plugin package
+        shell: pwsh
+        run: |
+          $package = 'bin/Release/latest.zip'
+          if (-not (Test-Path $package)) { throw "Dalamud package was not produced: $package" }
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          Copy-Item $package 'release/latest.zip' -Force
+
+      - name: Read plugin version
+        id: version
+        shell: pwsh
+        run: |
+          [xml]$project = Get-Content 'Adalomoon.csproj'
+          $version = $project.Project.PropertyGroup.Version
+          if (-not $version) { throw 'Project version is missing.' }
+          "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish release package
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Adalomoon Dialogue ${{ steps.version.outputs.tag }}
+          target_commitish: main
+          files: release/latest.zip
+          fail_on_unmatched_files: true
+
